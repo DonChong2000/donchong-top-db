@@ -1,0 +1,15 @@
+{
+  "name": "donchong-top-db",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "ingest": "node scripts/rag-ingest.mjs",
+    "delete": "node scripts/rag-ingest.mjs"
+  },
+  "dependencies": {
+    "@google/genai": "^1.16.0",
+    "dotenv": "^16.4.5",
+    "glob": "^11.0.0",
+    "pg": "^8.13.1"
+  }
+}
