@@ -169,8 +169,10 @@ async function ingestOneFile(filePath) {
           content,
           token_count,
           metadata,
+          embedding_model,
+          chunk_method,
           embedding
-        ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::vector)`,
+        ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9::vector)`,
         [
           randomUUID(),
           documentId,
@@ -182,6 +184,8 @@ async function ingestOneFile(filePath) {
             source: relativeSourcePath,
             basename
           }),
+          EMBEDDING_MODEL,
+          CHUNK_MODEL,
           normalizeVector(embedding)
         ]
       );
