@@ -60,6 +60,7 @@ What ingestion does:
 - Reads all `data/**/*.md`
 - Uses **Gemini Flash latest** (`gemini-2.5-flash`) to chunk content using prompt-based chunking guidelines
 - Uses **Gemini embedding model** (`gemini-embedding-001`) for vectors
+- Skips files whose content hash matches the last ingested version
 - Saves:
   - `documents.source` = source file path
   - `document_chunks.metadata.source` and `document_chunks.metadata.basename`

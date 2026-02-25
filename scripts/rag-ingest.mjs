@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 import dotenv from 'dotenv';
@@ -53,6 +53,10 @@ const chunkSchema = jsonSchema({
 
 function normalizeVector(values) {
   return `[${values.join(',')}]`;
+}
+
+function hashMarkdown(markdown) {
+  return createHash('sha256').update(markdown).digest('hex');
 }
 
 function parseDeleteCommand(rawArg) {
@@ -142,6 +146,18 @@ async function ingestOneFile(filePath) {
   const markdown = await readFile(filePath, 'utf8');
   const relativeSourcePath = path.relative(projectDir, filePath).replaceAll('\\', '/');
   const basename = path.basename(filePath);
+  const contentHash = hashMarkdown(markdown);
+
+  const existing = await db.query(
+    'SELECT metadata FROM documents WHERE source = $1 LIMIT 1',
+    [relativeSourcePath]
+  );
+  const existingHash = existing.rows[0]?.metadata?.hash ?? null;
+
+  if (existingHash === contentHash) {
+    console.log(`Skipping ${relativeSourcePath} (unchanged).`);
+    return;
+  }
 
   console.log(`Chunking ${relativeSourcePath}...`);
   const chunks = await chunkMarkdown(markdown, relativeSourcePath);
@@ -155,7 +171,12 @@ async function ingestOneFile(filePath) {
     await db.query(
       `INSERT INTO documents (id, source, title, metadata)
        VALUES ($1, $2, $3, $4::jsonb)`,
-      [documentId, relativeSourcePath, basename, JSON.stringify({ basename })]
+      [
+        documentId,
+        relativeSourcePath,
+        basename,
+        JSON.stringify({ basename, hash: contentHash })
+      ]
     );
 
     for (const chunk of chunks) {
