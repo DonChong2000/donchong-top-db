@@ -7,7 +7,7 @@
     "delete": "node scripts/rag-ingest.mjs"
   },
   "dependencies": {
-    "@google/genai": "^1.16.0",
+    "ai": "^6.0.99",
     "dotenv": "^16.4.5",
     "glob": "^11.0.0",
     "pg": "^8.13.1"

@@ -31,7 +31,7 @@ Required variables:
 ## 3) Install dependencies
 
 ```bash
-npm install
+pnpm install
 ```
 
 ## 4) Add markdown files
@@ -52,7 +52,7 @@ cp ../some-file.md data/notes/some-file.md
 ## 5) Ingest into RAG DB
 
 ```bash
-npm run ingest
+pnpm run ingest
 ```
 
 What ingestion does:

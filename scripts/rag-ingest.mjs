@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import { glob } from 'glob';
 import pg from 'pg';
-import { GoogleGenAI } from '@google/genai';
+import { createGateway, embed, generateText, jsonSchema, Output } from 'ai';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,8 +17,8 @@ dotenv.config({ path: path.join(projectDir, '.env') });
 
 const API_KEY = process.env.AI_GATEWAY_API_KEY;
 const DATABASE_URL = process.env.DATABASE_URL;
-const CHUNK_MODEL = process.env.CHUNK_MODEL ?? 'gemini-2.5-flash';
-const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL ?? 'gemini-embedding-001';
+const CHUNK_MODEL = process.env.CHUNK_MODEL ?? 'google/gemini-3-flash';
+const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL ?? 'google/gemini-embedding-001';
 
 if (!API_KEY) {
   throw new Error('Missing AI_GATEWAY_API_KEY. Add it to donchong-top-db/.env');
@@ -28,9 +28,28 @@ if (!DATABASE_URL) {
   throw new Error('Missing DATABASE_URL. Add it to donchong-top-db/.env');
 }
 
-const ai = new GoogleGenAI({ apiKey: API_KEY });
 const { Client } = pg;
+const gateway = createGateway({ apiKey: API_KEY });
 const db = new Client({ connectionString: DATABASE_URL });
+
+const chunkSchema = jsonSchema({
+  type: 'object',
+  properties: {
+    chunks: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          chunk_index: { type: 'integer' },
+          title: { type: 'string' },
+          content: { type: 'string' }
+        },
+        required: ['content']
+      }
+    }
+  },
+  required: ['chunks']
+});
 
 function normalizeVector(values) {
   return `[${values.join(',')}]`;
@@ -39,7 +58,7 @@ function normalizeVector(values) {
 function parseDeleteCommand(rawArg) {
   if (!rawArg) return null;
   const trimmed = rawArg.trim();
-  if (trimmed.toLowerCase().startsWith('delete ')) {
+if (trimmed.toLowerCase().startsWith('delete ')) {
     return trimmed.slice(7).trim();
   }
   return null;
@@ -55,7 +74,8 @@ Chunking guidelines:
 3. Preserve important headings and list context in chunk text.
 4. Keep code blocks intact when possible.
 5. Avoid tiny fragments unless they contain key facts.
-6. Return valid JSON only.
+6. Complete or supplement the context if needed.
+7. Return valid JSON only.
 
 Required output schema:
 {
@@ -74,17 +94,12 @@ Markdown:
 ${markdown}
 """`;
 
-  const response = await ai.models.generateContent({
-    model: CHUNK_MODEL,
-    contents: prompt,
-    config: {
-      responseMimeType: 'application/json',
-      temperature: 0.1
-    }
+  const { output: parsed } = await generateText({
+    model: gateway(CHUNK_MODEL),
+    prompt,
+    output: Output.object({ schema: chunkSchema }),
+    temperature: 0.1
   });
-
-  const rawText = response.text;
-  const parsed = JSON.parse(rawText);
 
   if (!parsed?.chunks || !Array.isArray(parsed.chunks) || parsed.chunks.length === 0) {
     throw new Error(`No chunks returned by model for ${sourceFile}`);
@@ -101,17 +116,16 @@ ${markdown}
 }
 
 async function embedText(text) {
-  const response = await ai.models.embedContent({
-    model: EMBEDDING_MODEL,
-    contents: text
+  const { embedding } = await embed({
+    model: gateway.embeddingModel(EMBEDDING_MODEL),
+    value: text
   });
 
-  const values = response.embeddings?.[0]?.values;
-  if (!values || values.length === 0) {
+  if (!embedding || embedding.length === 0) {
     throw new Error('Embedding API returned empty vector');
   }
 
-  return values;
+  return embedding;
 }
 
 async function deleteByFilename(inputName) {
@@ -193,7 +207,8 @@ async function main() {
     return;
   }
 
-  const markdownFiles = await glob(path.join(projectDir, 'data/**/*.md'));
+  const markdownPattern = path.join(projectDir, 'data/**/*.md').replaceAll('\\', '/');
+  const markdownFiles = await glob(markdownPattern);
   if (markdownFiles.length === 0) {
     console.log('No markdown files found in donchong-top-db/data. Nothing to ingest.');
     await db.end();
