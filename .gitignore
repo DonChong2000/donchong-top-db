@@ -26,6 +26,9 @@ out/
 # Local database data
 postgres_data/
 
+# Local markdown data
+data/**/*.md
+
 # OS files
 .DS_Store
 Thumbs.db
