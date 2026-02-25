@@ -83,6 +83,16 @@ node scripts/rag-ingest.mjs "Delete data/notes/some-file.md"
 
 The script deletes from `documents`; related `document_chunks` are deleted via `ON DELETE CASCADE`.
 
+## Search similar entries
+
+Command format:
+
+```bash
+npm run search -- "your query here"
+```
+
+The command returns the top 5 most similar chunks ranked by cosine similarity.
+
 ## Optional model overrides
 
 You can override defaults in `.env`:

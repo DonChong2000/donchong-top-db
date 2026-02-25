@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "ingest": "node scripts/rag-ingest.mjs",
-    "delete": "node scripts/rag-ingest.mjs"
+    "delete": "node scripts/rag-ingest.mjs",
+    "search": "node scripts/rag-search.mjs"
   },
   "dependencies": {
     "ai": "^6.0.99",
