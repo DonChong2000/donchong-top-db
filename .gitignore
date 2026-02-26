@@ -27,7 +27,8 @@ out/
 postgres_data/
 
 # Local markdown data
-data/**/*.{md,mdx}
+data/**/*.md
+data/**/*.mdx
 
 # OS files
 .DS_Store
