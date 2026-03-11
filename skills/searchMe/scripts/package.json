@@ -1,0 +1,11 @@
+{
+  "name": "searchme-rag",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "ai": "^6.0.116",
+    "dotenv": "^17.3.1",
+    "pg": "^8.16.0"
+  }
+}
