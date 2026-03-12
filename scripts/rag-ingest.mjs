@@ -42,9 +42,16 @@ const chunkSchema = jsonSchema({
         properties: {
           chunk_index: { type: 'integer' },
           title: { type: 'string' },
-          content: { type: 'string' }
+          range: {
+            type: 'object',
+            properties: {
+              start: { type: 'object', properties: { line: { type: 'integer' } }, required: ['line'] },
+              end: { type: 'object', properties: { line: { type: 'integer' } }, required: ['line'] }
+            },
+            required: ['start', 'end']
+          }
         },
-        required: ['content']
+        required: ['range']
       }
     }
   },
@@ -59,6 +66,42 @@ function hashMarkdown(markdown) {
   return createHash('sha256').update(markdown).digest('hex');
 }
 
+function softWrapLines(markdown, maxLen = 300) {
+  return markdown
+    .split('\n')
+    .flatMap((line) => {
+      if (line.length <= maxLen) return [line];
+      const segments = [];
+      let start = 0;
+      while (start < line.length) {
+        if (start + maxLen >= line.length) {
+          segments.push(line.substring(start));
+          break;
+        }
+        let breakAt = line.lastIndexOf(' ', start + maxLen);
+        if (breakAt <= start) breakAt = start + maxLen;
+        segments.push(line.substring(start, breakAt));
+        start = line[breakAt] === ' ' ? breakAt + 1 : breakAt;
+      }
+      return segments;
+    })
+    .join('\n');
+}
+
+function numberLines(text) {
+  return text
+    .split('\n')
+    .map((line, i) => `${i + 1}| ${line}`)
+    .join('\n');
+}
+
+function extractByRange(text, range) {
+  const lines = text.split('\n');
+  const start = Math.max(0, (range.start.line ?? 1) - 1);
+  const end = Math.min(lines.length - 1, (range.end.line ?? lines.length) - 1);
+  return lines.slice(start, end + 1).join('\n');
+}
+
 function parseDeleteCommand(rawArg) {
   if (!rawArg) return null;
   const trimmed = rawArg.trim();
@@ -69,16 +112,19 @@ if (trimmed.toLowerCase().startsWith('delete ')) {
 }
 
 async function chunkMarkdown(markdown, sourceFile) {
+  const wrapped = softWrapLines(markdown);
+
   const prompt = `You are an expert RAG chunking assistant.
-Chunk the markdown into semantically coherent chunks for retrieval.
+Split the numbered markdown below into semantically coherent chunks for retrieval.
+Return line ranges that reference the original text.
 
 Chunking guidelines:
 1. Keep each chunk focused on one idea or one subsection.
 2. Prefer chunks roughly 300-900 tokens; split long sections.
-3. Preserve important headings and list context in chunk text.
+3. Preserve important headings — include heading lines in the chunk range.
 4. Keep code blocks intact when possible.
 5. Avoid tiny fragments unless they contain key facts.
-6. Complete or supplement the context if needed.
+6. Ranges must not overlap and must cover every line of the document.
 7. Return valid JSON only.
 
 Required output schema:
@@ -87,15 +133,21 @@ Required output schema:
     {
       "chunk_index": 0,
       "title": "optional short heading",
-      "content": "chunk text"
+      "range": {
+        "start": { "line": 1 },
+        "end": { "line": 15 }
+      }
     }
   ]
 }
 
+- "line" is 1-based and inclusive on both start and end.
+- Chunk N end line + 1 must equal chunk N+1 start line (no gaps, no overlaps).
+
 Source filename: ${sourceFile}
 Markdown:
 """
-${markdown}
+${numberLines(wrapped)}
 """`;
 
   const { output: parsed } = await generateText({
@@ -113,7 +165,7 @@ ${markdown}
     .map((chunk, index) => ({
       chunk_index: Number.isInteger(chunk.chunk_index) ? chunk.chunk_index : index,
       title: typeof chunk.title === 'string' ? chunk.title : null,
-      content: String(chunk.content ?? '').trim()
+      content: extractByRange(wrapped, chunk.range).trim()
     }))
     .filter((chunk) => chunk.content.length > 0)
     .sort((a, b) => a.chunk_index - b.chunk_index);
